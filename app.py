@@ -13,7 +13,7 @@ if not os.path.exists(app.config['UPLOAD_FOLDER']):
 
 # 載入人臉與嘴巴模型
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_mcs_mouth.xml')
+mouth_cascade = cv2.CascadeClassifier('haarcascades/haarcascade_mcs_mouth.xml')
 
 def detect_position_and_teeth(image_path):
     img = cv2.imread(image_path)
