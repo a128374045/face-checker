@@ -11,8 +11,9 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 if not os.path.exists(app.config['UPLOAD_FOLDER']):
     os.makedirs(app.config['UPLOAD_FOLDER'])
 
-# 載入人臉模型（不再使用嘴巴模型）
+# 載入人臉與「微笑」（嘴巴）模型
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_smile.xml')
 
 def detect_position_and_teeth(image_path):
     img = cv2.imread(image_path)
@@ -27,22 +28,27 @@ def detect_position_and_teeth(image_path):
         face_center_y = y + h // 2
         height, width = img.shape[:2]
 
-        # 分成九宮格
+        # 九宮格定位
         col = 0 if face_center_x < width / 3 else (1 if face_center_x < width * 2 / 3 else 2)
         row = 0 if face_center_y < height / 3 else (1 if face_center_y < height * 2 / 3 else 2)
-        position = row * 3 + col + 1  # 九宮格 1~9
+        position = row * 3 + col + 1  # 1~9
 
-        # 不含牙齒偵測的對應表
+        # 嘴巴偵測（改用 smile）
+        roi_gray = gray[y + h//2:y + h, x:x + w]
+        mouths = mouth_cascade.detectMultiScale(roi_gray, scaleFactor=1.8, minNeighbors=20)
+        has_teeth = len(mouths) > 0
+
+        # 對應回應數字
         position_map = {
-            1: 10,  # 左上
-            2: 12,  # 正上
-            3: 1,   # 右上
-            4: 9,   # 正左
-            5: 13,  # 中間
-            6: 3,   # 正右
-            7: 7,   # 左下
-            8: 6,   # 正下
-            9: 4,   # 右下
+            1: 11 if has_teeth else 10,
+            2: 12,
+            3: 2 if has_teeth else 1,
+            4: 9,
+            5: 13,
+            6: 3,
+            7: 8 if has_teeth else 7,
+            8: 6,
+            9: 5 if has_teeth else 4,
         }
 
         return str(position_map[position])
