@@ -111,4 +111,4 @@ def index():
                 response = f"{symbol}{number}"
                 session.clear()
 
-    return render_template('chat.html', response=response, step=session.get('step', 1))
+    return render_template('index.html', response=response, step=session.get('step', 1))
