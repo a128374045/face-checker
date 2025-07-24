@@ -64,14 +64,14 @@ def determine_position_and_teeth(image):
         except:
             has_teeth = False
 
-        # 最終回傳編碼
+        # 最終回傳編碼（你之前調整過數字順序）
         mapping = {
             '正中': 13, '正上': 12, '正下': 6,
             '正左': 9, '正右': 3,
-            '左上': 10 if has_teeth else 11,
-            '右上': 2 if has_teeth else 1,
-            '左下': 7 if has_teeth else 8,
-            '右下': 5 if has_teeth else 4
+            '左上': 10 if not has_teeth else 11,
+            '右上': 1 if not has_teeth else 2,
+            '左下': 7 if not has_teeth else 8,
+            '右下': 4 if not has_teeth else 5
         }
         return str(mapping.get(pos, 0))
 
@@ -83,7 +83,7 @@ def index():
     response = None
 
     if request.method == 'POST':
-        # 使用者傳文字階段
+        # 第一步：輸入大師文字
         if session['step'] == 1 and 'text' in request.form:
             text = request.form['text'].strip()
             if '大師' in text:
@@ -96,11 +96,12 @@ def index():
             else:
                 response = "？"
 
+        # 第二步：再輸入一句話
         elif session['step'] == 2 and 'text' in request.form:
             session['step'] = 3
             response = "拍個照片我看看～"
 
-        # 使用者傳圖片階段
+        # 第三步：上傳照片
         elif session['step'] == 3 and 'image' in request.files:
             file = request.files['image']
             if file:
@@ -112,8 +113,3 @@ def index():
                 session.clear()
 
     return render_template('chat.html', response=response, step=session.get('step', 1))
-
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
