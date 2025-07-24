@@ -68,10 +68,10 @@ def determine_position_and_teeth(image):
         mapping = {
             '正中': 13, '正上': 12, '正下': 6,
             '正左': 9, '正右': 3,
-            '左上': 11 if not has_teeth else 10,
-            '右上': 1 if not has_teeth else 2,
-            '左下': 8 if not has_teeth else 7,
-            '右下': 4 if not has_teeth else 5
+            '左上': 10 if has_teeth else 11,
+            '右上': 2 if has_teeth else 1,
+            '左下': 7 if has_teeth else 8,
+            '右下': 5 if has_teeth else 4
         }
         return str(mapping.get(pos, 0))
 
@@ -111,4 +111,7 @@ def index():
                 response = f"{symbol}{number}"
                 session.clear()
 
-    return render_template('index.html', response=response, step=session.get('step', 1))
+    return render_template('chat.html', response=response, step=session.get('step', 1))
+
+if __name__ == '__main__':
+    app.run(debug=True)
