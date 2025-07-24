@@ -1,115 +1,99 @@
-from flask import Flask, request, render_template, session
+from flask import Flask, render_template, request, session
 import cv2
 import numpy as np
-import mediapipe as mp
+from PIL import Image
+import io
+import base64
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = "your_secret_key"
 
-mp_face_mesh = mp.solutions.face_mesh
+# 中文字判斷
+def count_chinese_characters(text):
+    return sum(1 for ch in text if '\u4e00' <= ch <= '\u9fff')
 
-# 中文字數計算
-def count_chinese(text):
-    return len([c for c in text if '\u4e00' <= c <= '\u9fff'])
+# 花色轉換
+def convert_to_suit(n):
+    suits = ["♠️", "♥️", "♣️", "♦️"]
+    return suits[(n - 1) % 4] if n > 0 else "？"
 
-# 數字轉花色
-def convert_to_symbol(num):
-    mapping = {1: '♠', 2: '♥', 3: '♣', 4: '♦'}
-    return mapping.get(num, str(num))
+# 臉部與牙齒判斷
+def detect_face_and_teeth(image_bytes):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    open_cv_image = np.array(img)
+    image_cv = open_cv_image[:, :, ::-1].copy()
 
-# 九宮格位置 + 牙齒判斷
-def determine_position_and_teeth(image):
-    h, w, _ = image.shape
-    cx, cy = w // 2, h // 2
+    gray = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+    faces = face_cascade.detectMultiScale(gray, 1.3, 5)
 
-    with mp_face_mesh.FaceMesh(static_image_mode=True) as face_mesh:
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(image_rgb)
+    height, width, _ = image_cv.shape
+    h_third = height // 3
+    w_third = width // 3
 
-        if not results.multi_face_landmarks:
-            return "無法偵測臉"
+    if len(faces) == 0:
+        return 0
 
-        face = results.multi_face_landmarks[0]
-        nose_tip = face.landmark[1]
-        x = int(nose_tip.x * w)
-        y = int(nose_tip.y * h)
+    for (x, y, w, h) in faces:
+        center_x = x + w // 2
+        center_y = y + h // 2
 
-        # 定位
-        if y < cy and x < cx:
-            pos = '左上'
-        elif y < cy and x > cx:
-            pos = '右上'
-        elif y > cy and x < cx:
-            pos = '左下'
-        elif y > cy and x > cx:
-            pos = '右下'
-        elif abs(x - cx) <= w * 0.1:
-            if y < cy:
-                pos = '正上'
-            elif y > cy:
-                pos = '正下'
-            else:
-                pos = '正中'
-        elif x < cx:
-            pos = '正左'
+        col = center_x // w_third
+        row = center_y // h_third
+        index = row * 3 + col + 1
+
+        # 模擬牙齒辨識
+        mouth_region = gray[y + h // 2:y + h, x:x + w]
+        white_pixels = cv2.countNonZero(mouth_region > 200)
+        teeth = white_pixels > 50
+
+        # 根據九宮格位置 + 牙齒
+        if row == 0 and col == 0:
+            return 11 if teeth else 10
+        elif row == 0 and col == 2:
+            return 2 if teeth else 1
+        elif row == 2 and col == 0:
+            return 8 if teeth else 7
+        elif row == 2 and col == 2:
+            return 5 if teeth else 4
+        elif row == 0 and col == 1:
+            return 12
+        elif row == 2 and col == 1:
+            return 6
+        elif row == 1 and col == 0:
+            return 9
+        elif row == 1 and col == 2:
+            return 3
         else:
-            pos = '正右'
+            return 13
 
-        # 牙齒判斷
-        try:
-            lip_top = face.landmark[13]
-            lip_bottom = face.landmark[14]
-            lip_distance = abs(lip_top.y - lip_bottom.y) * h
-            has_teeth = lip_distance > 5
-        except:
-            has_teeth = False
-
-        # 最終回傳編碼（你之前調整過數字順序）
-        mapping = {
-            '正中': 13, '正上': 12, '正下': 6,
-            '正左': 9, '正右': 3,
-            '左上': 10 if not has_teeth else 11,
-            '右上': 1 if not has_teeth else 2,
-            '左下': 7 if not has_teeth else 8,
-            '右下': 4 if not has_teeth else 5
-        }
-        return str(mapping.get(pos, 0))
-
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    if 'step' not in session:
-        session['step'] = 1
+    if "step" not in session:
+        session["step"] = 1
 
-    response = None
+    response = ""
+    step = session["step"]
 
-    if request.method == 'POST':
-        # 第一步：輸入大師文字
-        if session['step'] == 1 and 'text' in request.form:
-            text = request.form['text'].strip()
-            if '大師' in text:
-                cleaned = text.replace('大師', '')
-                count = count_chinese(cleaned)
-                symbol = convert_to_symbol(count)
-                session['symbol'] = symbol
-                session['step'] = 2
-                response = "你說什麼？"
-            else:
-                response = "？"
+    if request.method == "POST":
+        if step == 1:
+            text = request.form["text"]
+            text_wo_keyword = text.replace("大師", "")
+            count = count_chinese_characters(text_wo_keyword)
+            session["suit"] = convert_to_suit(count)
+            session["step"] = 2
+            response = "什麼事？"
 
-        # 第二步：再輸入一句話
-        elif session['step'] == 2 and 'text' in request.form:
-            session['step'] = 3
-            response = "拍個照片我看看～"
+        elif step == 2:
+            session["step"] = 3
+            response = "拍個照片我看看"
 
-        # 第三步：上傳照片
-        elif session['step'] == 3 and 'image' in request.files:
-            file = request.files['image']
-            if file:
-                img_array = np.frombuffer(file.read(), np.uint8)
-                image = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-                number = determine_position_and_teeth(image)
-                symbol = session.get('symbol', '?')
-                response = f"{symbol}{number}"
-                session.clear()
+        elif step == 3 and "image" in request.files:
+            image = request.files["image"]
+            image_bytes = image.read()
+            number = detect_face_and_teeth(image_bytes)
+            final_response = f"{session.get('suit', '？')}{number}"
+            session.clear()
+            response = final_response
 
-    return render_template('chat.html', response=response, step=session.get('step', 1))
+    return render_template("index.html", step=session.get("step", 1), response=response)
